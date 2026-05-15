@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import sqlite3
 import re
@@ -24,69 +24,45 @@ conn.execute('''CREATE TABLE IF NOT EXISTS reports (
 )''')
 conn.commit()
 
-# ===================== UPLOAD + PARSE =====================
-st.header("📄 Upload Full Minutes PDF")
+st.header("📄 Upload PDF")
 
-uploaded_file = st.file_uploader("Upload the full council minutes PDF", type=["pdf"])
+uploaded_file = st.file_uploader("Upload full minutes PDF", type=["pdf"])
 
-parsed_reports = []
-
-if uploaded_file and st.button("🔄 Auto Parse ALL Reports"):
+if uploaded_file and st.button("Auto Parse All Reports"):
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-    full_text = "".join(page.get_text() for page in doc)
-
-    # Split by report
-    items = re.split(r'(CORPORATE AND COMMUNITY NO\.\s*CC\d+/\d+)', full_text, re.I)
+    text = "".join(page.get_text() for page in doc)
     
-    for i in range(1, len(items), 2):
-        if i + 1 >= len(items):
-            continue
-        section = items[i] + items[i+1]
-        
-        report_num = re.search(r'NO\.\s*(CC\d+/\d+)', section, re.I)
-        if not report_num:
-            continue
-            
-        title = re.search(r'SUBJECT:\s*(.+?)(?=MOTION|AMENDMENT|$)', section, re.I | re.S)
-        rec = re.search(r'(?:RECOMMENDATION|MOTION)[:\s]*(.+?)(?=Moved|FOR|CARRIED|$)', section, re.I | re.S)
-        for_block = re.search(r'FOR\s*(.+?)(?=AGAINST|Total)', section, re.I | re.S)
-        against_block = re.search(r'AGAINST\s*(.+?)(?=Total)', section, re.I | re.S)
-        outcome = re.search(r'(CARRIED|LOST|PUT and CARRIED)', section, re.I)
-        conflicts = re.search(r'Conflict.*?Interest[:\s]*(.+?)(?=\n{2,}|$)', section, re.I | re.S)
-        
-        parsed_reports.append({
-            'report_number': report_num.group(1).upper(),
-            'title': title.group(1).strip() if title else "Untitled",
-            'recommendation': rec.group(1).strip() if rec else "",
-            'yes_votes': for_block.group(1).strip() if for_block else "",
-            'no_votes': against_block.group(1).strip() if against_block else "",
-            'outcome': outcome.group(0) if outcome else "Approved",
-            'conflicts': conflicts.group(1).strip() if conflicts else ""
-        })
+    reports = re.split(r'(CORPORATE AND COMMUNITY NO\.\s*CC\d+/\d+)', text)
+    st.success(f"Found {len(reports)//2} potential reports")
 
-    st.success(f"✅ Found *{len(parsed_reports)} reports*!")
+st.header("📝 Data Entry")
+col1, col2 = st.columns(2)
+with col1:
+    rn = st.text_input("Report Number")
+    title = st.text_input("Title")
+    date = st.date_input("Meeting Date", datetime.now().date())
+with col2:
+    rec = st.text_area("Recommendation")
+    outcome = st.selectbox("Outcome", ["Approved", "Carried", "Lost", "Englobo"])
+yes = st.text_input("YES Votes")
+no = st.text_input("NO Votes")
+conflicts = st.text_area("Conflicts of Interest")
+englobo = st.checkbox("Englobo")
 
-# Show parsed reports
-if parsed_reports:
-    st.header(f"📋 {len(parsed_reports)} Reports Found")
-    for idx, r in enumerate(parsed_reports):
-        with st.expander(f"{r['report_number']} - {r['title'][:70]}...", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                rn = st.text_input("Report Number", r['report_number'], key=f"rn{idx}")
-                t = st.text_input("Title", r['title'], key=f"t{idx}")
-            with col2:
-                rec = st.text_area("Recommendation", r['recommendation'], height=80, key=f"rec{idx}")
-                out = st.selectbox("Outcome", ["Approved", "Carried", "Lost", "Englobo"], key=f"out{idx}")
-            
-            yes = st.text_input("YES Votes", r['yes_votes'], key=f"yes{idx}")
-            no = st.text_input("NO Votes", r['no_votes'], key=f"no{idx}")
-            conf = st.text_area("Conflicts", r['conflicts'], key=f"conf{idx}")
-            eng = st.checkbox("Englobo", key=f"eng{idx}")
-            
-            if st.button("Save This Report", key=f"save{idx}"):
-                c = conn.cursor()
-                c.execute("""INSERT INTO reports 
-                    (report_number, title, meeting_date, recommendation, yes_votes, no_votes, 
-                     outcome, conflicts, englobo, entered_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""
+if st.button("Save Report"):
+    c = conn.cursor()
+    c.execute("""INSERT INTO reports 
+        (report_number, title, meeting_date, recommendation, yes_votes, no_votes, outcome, conflicts, englobo, entered_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (rn, title, str(date), rec, yes, no, outcome, conflicts, 1 if englobo else 0, datetime.now().isoformat()))
+    conn.commit()
+    st.success("Saved!")
+
+st.header("🔍 Search")
+search = st.text_input("Search")
+if search:
+    df = pd.read_sql_query("SELECT * FROM reports WHERE report_number LIKE ? OR title LIKE ? ORDER BY meeting_date DESC", conn, params=[f"%{search}%"]*2)
+else:
+    df = pd.read_sql_query("SELECT * FROM reports ORDER BY meeting_date DESC", conn)
+
+st.dataframe(df, use_container_width=True)
