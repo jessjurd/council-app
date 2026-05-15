@@ -21,51 +21,38 @@ conn.execute('''CREATE TABLE IF NOT EXISTS reports (
 )''')
 conn.commit()
 
-# SEARCH AT TOP
-st.header("🔍 SEARCH")
-search = st.text_input("Search by report number, title, or councillor")
-
-# DATA ENTRY
 st.header("📝 Data Entry")
-
 col1, col2 = st.columns(2)
 with col1:
-    rn = st.text_input("Report Number", placeholder="CC20/2026")
+    rn = st.text_input("Report Number")
     title = st.text_input("Title")
     date = st.date_input("Meeting Date", datetime.now().date())
 with col2:
     rec = st.text_area("Recommendation", height=100)
     outcome = st.selectbox("Outcome", ["Approved", "Carried", "Lost", "Englobo"])
 
-yes = st.text_input("Who voted YES (comma separated)")
-no = st.text_input("Who voted NO (comma separated)")
+yes = st.text_input("YES Votes")
+no = st.text_input("NO Votes")
 conflicts = st.text_area("Conflicts of Interest")
 
-if st.button("💾 Save This Report"):
+if st.button("Save Report"):
     c = conn.cursor()
     c.execute("""INSERT INTO reports 
         (report_number, title, meeting_date, recommendation, yes_votes, no_votes, outcome, conflicts, entered_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (rn, title, str(date), rec, yes, no, outcome, conflicts, datetime.now().isoformat()))
     conn.commit()
-    st.success("✅ Report Saved!")
+    st.success("Saved!")
 
-# DISPLAY SAVED REPORTS AS CARDS
-st.header("All Saved Reports")
-df = pd.read_sql_query("SELECT * FROM reports ORDER BY entered_at DESC", conn)
+st.header("Search")
+search = st.text_input("Search")
+if search:
+    df = pd.read_sql_query("SELECT * FROM reports WHERE report_number LIKE ? OR title LIKE ?", conn, params=[f"%{search}%"]*2)
+else:
+    df = pd.read_sql_query("SELECT * FROM reports ORDER BY entered_at DESC", conn)
 
-for _, row in df.iterrows():
-    with st.container(border=True):
-        st.subheader(f"{row['report_number']} - {row['title']}")
-        st.caption(row['meeting_date'])
-        st.write("*Recommendation:*", row['recommendation'][:500] + "..." if len(str(row['recommendation'])) > 500 else row['recommendation'])
-        if row['yes_votes']:
-            st.write("*YES:*", row['yes_votes'])
-        if row['no_votes']:
-            st.write("*NO:*", row['no_votes'])
-        st.write("*Outcome:*", row['outcome'])
-        if row['conflicts']:
-            st.warning(f"⚠️ Conflicts: {row['conflicts']}")
+st.dataframe(df, use_container_width=True)
 
-# TABLE + EXPORT
-if st
+if st.button("Export to CSV"):
+    df.to_csv("cessnock_reports.csv", index=False)
+    st.success("Exported!")
