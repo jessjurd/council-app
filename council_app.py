@@ -8,8 +8,8 @@ import sqlite3
 import os
 from datetime import datetime
 from typing import List, Tuple, Optional
-import PyPDF2
-from pathlib import Path
+import PyMuP
+from pathlib import PyMuPDF
 
 
 # ============================================================================
