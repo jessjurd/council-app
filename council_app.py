@@ -23,22 +23,21 @@ conn.commit()
 
 st.header("📄 Upload PDF")
 uploaded_file = st.file_uploader("Upload full minutes PDF", type=["pdf"])
-
 if uploaded_file:
-    st.success("PDF uploaded. Use the form below to add each report manually.")
+    st.success("PDF uploaded - add reports manually below")
 
-st.header("📝 Data Entry (Add one report at a time)")
+st.header("📝 Add One Report")
 col1, col2 = st.columns(2)
 with col1:
-    rn = st.text_input("Report Number", placeholder="CC20/2026")
+    rn = st.text_input("Report Number", "CC1/2026")
     title = st.text_input("Title")
     date = st.date_input("Meeting Date", datetime.now().date())
 with col2:
     rec = st.text_area("Recommendation", height=100)
     outcome = st.selectbox("Outcome", ["Approved", "Carried", "Lost", "Englobo"])
 
-yes = st.text_input("Who voted YES (comma separated)")
-no = st.text_input("Who voted NO (comma separated)")
+yes = st.text_input("YES Votes")
+no = st.text_input("NO Votes")
 conflicts = st.text_area("Conflicts of Interest")
 
 if st.button("💾 Save This Report"):
@@ -48,7 +47,7 @@ if st.button("💾 Save This Report"):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (rn, title, str(date), rec, yes, no, outcome, conflicts, datetime.now().isoformat()))
     conn.commit()
-    st.success("✅ Report Saved! Add the next one.")
+    st.success("✅ Saved! Add the next report.")
 
 st.header("🔍 All Saved Reports")
 df = pd.read_sql_query("SELECT * FROM reports ORDER BY entered_at DESC", conn)
