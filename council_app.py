@@ -25,81 +25,28 @@ conn.execute('''CREATE TABLE IF NOT EXISTS reports (
 )''')
 conn.commit()
 
-# ===================== UPLOAD + AUTO PARSE =====================
-st.header("📄 Upload Minutes PDF (Auto Parse)")
+# ===================== UPLOAD + AUTO FILL =====================
+st.header("📄 Upload PDF (Auto Fill Fields)")
 
 uploaded_file = st.file_uploader("Upload Council Minutes PDF", type=["pdf"])
 
-if uploaded_file:
-    if st.button("🔄 Parse PDF Automatically"):
-        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-        text = "".join(page.get_text() for page in doc)
-        
-        # Auto extraction
-        report_num = re.search(r'(CC\d+/\d+)', text, re.I)
-        title = re.search(r'SUBJECT:\s*(.+?)(?=MOTION|RECOMMENDATION|$)', text, re.I | re.S)
-        rec = re.search(r'(?:RECOMMENDATION|MOTION)[:\s]*(.+?)(?=Moved|FOR|CARRIED|$)', text, re.I | re.S)
-        
-        yes = re.search(r'FOR[:\s]*(.+?)(?=AGAINST|Total)', text, re.I | re.S)
-        no = re.search(r'AGAINST[:\s]*(.+?)(?=Total|CARRIED)', text, re.I | re.S)
-        
-        conflicts = re.search(r'Conflict.*?Interest[:\s]*(.+?)(?=\n{2,}|$)', text, re.I | re.S)
-        
-        st.success("✅ Parsed! Review below and save.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            report_number = st.text_input("Report Number", value=report_num.group(1) if report_num else "")
-            title_input = st.text_input("Title", value=title.group(1).strip() if title else "")
-            meeting_date = st.date_input("Meeting Date", datetime.now().date())
-        with col2:
-            recommendation = st.text_area("Recommendation", value=rec.group(1).strip() if rec else "", height=100)
-            outcome = st.selectbox("Outcome", ["Approved", "Carried", "Lost", "Englobo", "Not Approved"])
-        
-        yes_votes = st.text_input("YES Votes (names)", value=yes.group(1).strip() if yes else "")
-        no_votes = st.text_input("NO Votes (names)", value=no.group(1).strip() if no else "")
-        conflicts_input = st.text_area("Conflicts of Interest", value=conflicts.group(1).strip() if conflicts else "")
-        englobo = st.checkbox("This was Englobo")
+auto_data = {}
+if uploaded_file and st.button("🔄 Auto Parse PDF"):
+    doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+    text = "".join(page.get_text() for page in doc)
+    
+    auto_data['report_number'] = re.search(r'(CC\d+/\d+)', text, re.I)
+    auto_data['title'] = re.search(r'SUBJECT:\s*(.+)', text, re.I)
+    auto_data['rec'] = re.search(r'(?:RECOMMENDATION|MOTION)[:\s]*(.+?)(?=Moved|FOR|CARRIED|$)', text, re.I | re.S)
+    auto_data['conflicts'] = re.search(r'Conflict.*?Interest[:\s]*(.+?)(?=\n{2,}|$)', text, re.I | re.S)
 
-        if st.button("💾 Save Parsed Report"):
-            c = conn.cursor()
-            c.execute("""INSERT INTO reports 
-                (report_number, title, meeting_date, recommendation, yes_votes, no_votes, 
-                 outcome, conflicts, englobo, entered_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (report_number, title_input, str(meeting_date), recommendation, 
-                 yes_votes, no_votes, outcome, conflicts_input, 1 if englobo else 0, 
-                 datetime.now().isoformat()))
-            conn.commit()
-            st.success("Report Saved!")
+    st.success("✅ Parsed! Fields below are auto-filled. Edit if needed.")
 
-# ===================== SEARCH & VIEW =====================
-st.header("🔍 Search Reports")
-search_term = st.text_input("Search by report number, title, councillor, or keyword")
+# ===================== DATA ENTRY =====================
+st.header("📝 Data Entry")
 
-if search_term:
-    df = pd.read_sql_query("""
-        SELECT * FROM reports 
-        WHERE report_number LIKE ? OR title LIKE ? OR recommendation LIKE ? 
-        OR yes_votes LIKE ? OR no_votes LIKE ? OR conflicts LIKE ?
-        ORDER BY meeting_date DESC
-    """, conn, params=[f"%{search_term}%"]*6)
-else:
-    df = pd.read_sql_query("SELECT * FROM reports ORDER BY meeting_date DESC", conn)
-
-# Card display
-for _, row in df.iterrows():
-    with st.expander(f"📋 {row['report_number']} - {row['title'][:80]}...", expanded=False):
-        st.write(f"*Date:* {row['meeting_date']}")
-        st.write(f"*Recommendation:* {row['recommendation']}")
-        if row['yes_votes']: st.write(f"*YES:* {row['yes_votes']}")
-        if row['no_votes']: st.write(f"*NO:* {row['no_votes']}")
-        if row['outcome']: st.write(f"*Outcome:* {row['outcome']}")
-        if row['conflicts']: st.warning(f"⚠️ Conflicts: {row['conflicts']}")
-        if row['englobo']: st.info("📦 Englobo item")
-
-st.dataframe(df, use_container_width=True)
-
-if st.button("Export All to CSV"):
-    df.to_csv("cessnock_council_reports.csv", index=False)
-    st.success("✅ Exported!")
+col1, col2 = st.columns(2)
+with col1:
+    report_number = st.text_input("Report Number", value=auto_data.get('report_number').group(1) if auto_data.get('report_number') else "")
+    title = st.text_input("Title", value=auto_data.get('title').group(1).strip() if auto_data.get('title') else "")
+    meeting_date = st.date
