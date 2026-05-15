@@ -21,19 +21,16 @@ conn.execute('''CREATE TABLE IF NOT EXISTS reports (
 )''')
 conn.commit()
 
-# Upload
 st.header("📄 Upload PDF")
 uploaded_file = st.file_uploader("Upload full minutes PDF", type=["pdf"])
 
 if uploaded_file:
-    st.success("PDF uploaded - ready for manual entry (auto-split coming soon)")
+    st.success("PDF uploaded. Use the form below to add each report manually.")
 
-# Data Entry
-st.header("📝 Data Entry")
-
+st.header("📝 Data Entry (Add one report at a time)")
 col1, col2 = st.columns(2)
 with col1:
-    rn = st.text_input("Report Number", "CC1/2026")
+    rn = st.text_input("Report Number", placeholder="CC20/2026")
     title = st.text_input("Title")
     date = st.date_input("Meeting Date", datetime.now().date())
 with col2:
@@ -51,16 +48,10 @@ if st.button("💾 Save This Report"):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (rn, title, str(date), rec, yes, no, outcome, conflicts, datetime.now().isoformat()))
     conn.commit()
-    st.success("✅ Report Saved!")
+    st.success("✅ Report Saved! Add the next one.")
 
-# Search
-st.header("🔍 Search")
-search = st.text_input("Search term")
-if search:
-    df = pd.read_sql_query("SELECT * FROM reports WHERE report_number LIKE ? OR title LIKE ? OR conflicts LIKE ?", conn, params=[f"%{search}%"]*3)
-else:
-    df = pd.read_sql_query("SELECT * FROM reports ORDER BY entered_at DESC", conn)
-
+st.header("🔍 All Saved Reports")
+df = pd.read_sql_query("SELECT * FROM reports ORDER BY entered_at DESC", conn)
 st.dataframe(df, use_container_width=True)
 
 if st.button("Export to CSV"):
